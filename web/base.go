@@ -8,9 +8,9 @@ func init() {
 	router = httprouter.New()
 }
 
-type errorInfo struct {
-	code int
-	msg  string
+type ErrorInfo struct {
+	Code int    `json:"code"` //字段首字母要大写才能导出
+	Msg  string `json:"msg"`
 }
 
 func Httprouter() *httprouter.Router {
