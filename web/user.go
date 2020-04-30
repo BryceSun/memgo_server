@@ -19,6 +19,7 @@ func register(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	email := r.FormValue("email")
+	mobile := r.FormValue("mobile")
 	if len(username) == 0 || len(password) == 0 {
 		w.WriteHeader(http.StatusNotAcceptable)
 		i := ErrorInfo{http.StatusNotAcceptable, "昵称密码不可为空"}
@@ -29,6 +30,7 @@ func register(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 			Name:     username,
 			Password: password,
 			Email:    email,
+			Mobile:   mobile,
 		}
 		uid, err := database.Register(user)
 		if err != nil {

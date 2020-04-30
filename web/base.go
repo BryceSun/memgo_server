@@ -2,7 +2,9 @@ package web
 
 import "github.com/julienschmidt/httprouter"
 
-var router *httprouter.Router
+var (
+	router *httprouter.Router
+)
 
 func init() {
 	router = httprouter.New()
