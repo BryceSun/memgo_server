@@ -1,4 +1,4 @@
-package web
+package route
 
 import "github.com/julienschmidt/httprouter"
 
@@ -15,6 +15,6 @@ type ErrorInfo struct {
 	Msg  string `json:"msg"`
 }
 
-func Httprouter() *httprouter.Router {
+func HttpRouter() *httprouter.Router {
 	return router
 }

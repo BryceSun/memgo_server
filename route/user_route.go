@@ -1,15 +1,17 @@
-package web
+package route
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/memgo_server/database"
+	. "github.com/memgo_server/databean"
+	. "github.com/memgo_server/handler"
 	"net/http"
 )
 
 func init() {
-	router := Httprouter()
+	router := HttpRouter()
 	router.PUT("/user/account", register)
 	router.PUT("/user/token", login)
 	router.DELETE("/user/token", logout)
@@ -20,23 +22,18 @@ func register(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	password := r.FormValue("password")
 	email := r.FormValue("email")
 	mobile := r.FormValue("mobile")
-	if len(username) == 0 || len(password) == 0 {
+	user := &UserInfo{
+		Username: username,
+		Password: password,
+		Email:    email,
+		Mobile:   mobile,
+	}
+	_, e := Register(user)
+	if e != nil {
 		w.WriteHeader(http.StatusNotAcceptable)
 		i := ErrorInfo{http.StatusNotAcceptable, "昵称密码不可为空"}
 		encoder := json.NewEncoder(w)
 		encoder.Encode(i)
-	} else {
-		user := &database.UserInfo{
-			Name:     username,
-			Password: password,
-			Email:    email,
-			Mobile:   mobile,
-		}
-		uid, err := database.Register(user)
-		if err != nil {
-			fmt.Fprint(w, "系统错误!\n")
-		}
-		fmt.Fprint(w, uid)
 	}
 }
 
