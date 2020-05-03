@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	. "github.com/memgo_server/databean"
-	"log"
 )
 
 const (
@@ -16,7 +15,7 @@ const (
 	userIdIndex  = userBaseKey + ":index"
 )
 
-func clearUser() (int64, error) {
+func ClearUser() (int64, error) {
 	pattern := userBaseKey + "*"
 	return clearRedis(pattern)
 }
@@ -66,8 +65,6 @@ func GetUserInfo(uid int64) (user UserInfo, err error) {
 	if err != nil {
 		return
 	}
-	log.Println(userJsonStr)
 	err = json.Unmarshal([]byte(userJsonStr), &user)
-	log.Println(user)
 	return
 }

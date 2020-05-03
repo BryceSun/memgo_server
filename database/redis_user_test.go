@@ -30,7 +30,7 @@ var users = []UserInfo{
 var clear = true
 
 func TestAddUser(t *testing.T) {
-	_, e := clearUser()
+	_, e := ClearUser()
 	if e != nil {
 		t.Errorf("clearing user redis has error:%v ", e)
 	}
@@ -46,7 +46,7 @@ func TestAddUser(t *testing.T) {
 	}
 
 	if clear {
-		i, e := clearUser()
+		i, e := ClearUser()
 		if e != nil {
 			t.Errorf("clearing user redis has error:%v ", e)
 		}
@@ -57,7 +57,7 @@ func TestAddUser(t *testing.T) {
 }
 
 func TestGetUserId(t *testing.T) {
-	_, e := clearUser()
+	_, e := ClearUser()
 	if e != nil {
 		t.Errorf("clearing user redis has error:%v ", e)
 	}

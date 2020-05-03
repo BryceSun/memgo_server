@@ -16,6 +16,7 @@ var (
 	PasswordIsRequired     = errors.New("密码不可为空")
 	PasswordIsWrong        = errors.New("密码错误")
 	ParamsAreEmpty         = errors.New("缺乏有效参数")
+	UserInfoNotExist       = errors.New("用户不存在")
 )
 
 //查询是否可以注册
@@ -49,13 +50,13 @@ func Register(user *UserInfo) (int64, error) {
 }
 
 // 登录
-func Login(user *UserInfo) (auth string, err error) {
-	username, email, mobile, password := user.Username, user.Email, user.Mobile, user.Password
-	loginName := username + email + mobile
+func Login(user Loginer) (auth string, err error) {
+	loginName := user.GetName()
 	if 0 == len(loginName) {
 		err = CanNotBeAllEmpty
 		return
 	}
+	password := user.GetPassword()
 	if 0 == len(password) {
 		err = PasswordIsRequired
 		return
@@ -63,16 +64,17 @@ func Login(user *UserInfo) (auth string, err error) {
 	// get user id by login name
 	uid, err := database.GetUserId(loginName)
 	if err != nil {
+		err = UserInfoNotExist
 		return
 	}
 	// get user info by id
-	*user, err = database.GetUserInfo(uid)
+	u, err := database.GetUserInfo(uid)
 	if err != nil {
 		return
 	}
 	// check password
 	password = fmt.Sprintf("%x", md5.Sum([]byte(password)))
-	if password != user.Password {
+	if password != u.Password {
 		err = PasswordIsWrong
 		return
 	}
