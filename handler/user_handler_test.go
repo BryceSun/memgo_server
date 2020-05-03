@@ -3,15 +3,11 @@ package handler
 import (
 	"github.com/memgo_server/database"
 	. "github.com/memgo_server/databean"
+	"log"
 	"testing"
 )
 
 type userTest struct {
-	UserInfo
-	IdExpect    int64
-	ErrorExpect error
-}
-type userLoginTest struct {
 	UserInfo
 	IdExpect    int64
 	ErrorExpect error
@@ -39,6 +35,7 @@ var user1login10 = UserInfo{Email: "tony@foxmail.com", Password: "123456"}
 var user1login11 = UserInfo{Mobile: "15818376547", Password: "123456"}
 var user1login12 = UserInfo{Username: "tony", Email: "tony@foxmail.com", Mobile: "15818376547", Password: "123455"}
 var user1login13 = UserInfo{Username: "tony", Email: "tony@foxmail.com", Mobile: "15818376547", Password: "123456"}
+var user5login1 = UserInfo{Username: "bryce", Email: "bryce@foxmail.com", Mobile: "15016724757", Password: "123456"}
 
 var userTests = []userTest{
 	{UserInfo: user1, IdExpect: 1, ErrorExpect: nil},
@@ -65,6 +62,7 @@ var user1LoginTests = []userTest{
 	{UserInfo: user1login11, ErrorExpect: nil},
 	{UserInfo: user1login12, ErrorExpect: PasswordIsWrong},
 	{UserInfo: user1login13, ErrorExpect: nil},
+	{UserInfo: user5login1, ErrorExpect: nil},
 }
 
 func TestRegister(t *testing.T) {
@@ -83,14 +81,35 @@ func TestRegister(t *testing.T) {
 func TestLogin(t *testing.T) {
 	database.ClearUser()
 	Register(&user1)
+	Register(&user5)
 	for _, u := range user1LoginTests {
-		_, e := Login(&u.UserInfo)
+		//time.Sleep(time.Second/2)
+		token, e := Login(&u.UserInfo)
 		if e != nil && e != u.ErrorExpect {
 			t.Errorf("error happened,but not expected :%v", e)
 			continue
 		}
-		if e != u.ErrorExpect {
-			t.Errorf("error should happened :%v", e)
+		if e == nil && len(token) == 0 {
+			t.Error("token must not be empty")
 		}
+		if len(token) != 0 {
+			log.Println(token)
+		}
+	}
+}
+
+func TestLogout(t *testing.T) {
+	TestLogin(t)
+	e := Logout(1)
+	if e != nil {
+		t.Errorf("logout error:%v", e)
+	}
+	e = Logout(2)
+	if e != nil {
+		t.Errorf("logout error:%v", e)
+	}
+	e = Logout(3)
+	if e != NotLogonUser {
+		t.Error("should be expected error:", e)
 	}
 }

@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v7"
 	. "github.com/memgo_server/databean"
+	"strconv"
 )
 
 const (
 	userBaseKey  = memgoKey + ":user"
 	userInfosKey = userBaseKey + ":info"
-	loginsKey    = userBaseKey + ":login"
+	logExpireKey = userBaseKey + ":login"
 	userIdGenKey = userBaseKey + ":idgen"
 	userIdIndex  = userBaseKey + ":index"
 )
@@ -67,4 +68,17 @@ func GetUserInfo(uid int64) (user UserInfo, err error) {
 	}
 	err = json.Unmarshal([]byte(userJsonStr), &user)
 	return
+}
+
+func LogExpireTime(uid, expireTime int64) error {
+	_, err := RedisClient.HSet(logExpireKey, uid, expireTime).Result()
+	return err
+}
+
+func GetExpireTime(uid int64) (int64, error) {
+	time, err := RedisClient.HGet(logExpireKey, fmt.Sprint(uid)).Result()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(time, 10, 64)
 }

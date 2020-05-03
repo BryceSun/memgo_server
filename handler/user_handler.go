@@ -4,8 +4,10 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/memgo_server/database"
 	. "github.com/memgo_server/databean"
+	"time"
 )
 
 var (
@@ -17,6 +19,7 @@ var (
 	PasswordIsWrong        = errors.New("密码错误")
 	ParamsAreEmpty         = errors.New("缺乏有效参数")
 	UserInfoNotExist       = errors.New("用户不存在")
+	NotLogonUser           = errors.New("非在线用户")
 )
 
 //查询是否可以注册
@@ -78,7 +81,36 @@ func Login(user Loginer) (auth string, err error) {
 		err = PasswordIsWrong
 		return
 	}
+	return getToken(&u)
+}
 
-	// todo add jwt
-	return "auth123456", nil
+func getToken(user *UserInfo) (string, error) {
+
+	mySigningKey := []byte("MemGoIsBestToolToUse")
+
+	expireTime := time.Now().Add(24 * time.Second).Unix()
+	e := database.LogExpireTime(user.Id, expireTime)
+	if e != nil {
+		return "", e
+	}
+
+	claims := make(jwt.MapClaims)
+	claims["exp"] = expireTime
+	claims["iat"] = time.Now().Unix()
+	claims["uid"] = user.Id
+	claims["unm"] = user.Username
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(mySigningKey)
+}
+
+func Logout(uid int64) error {
+	now := time.Now().Unix()
+	exTime, e := database.GetExpireTime(uid)
+	if e != nil {
+		return NotLogonUser
+	}
+	if exTime > now {
+		return database.LogExpireTime(uid, now)
+	}
+	return nil
 }
