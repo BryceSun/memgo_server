@@ -1,9 +1,16 @@
 package handler
 
 import (
+	"bytes"
 	"github.com/memgo_server/database"
 	. "github.com/memgo_server/databean"
+	"io"
+	"io/ioutil"
 	"log"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -112,4 +119,48 @@ func TestLogout(t *testing.T) {
 	if e != NotLogonUser {
 		t.Error("should be expected error:", e)
 	}
+}
+
+func TestOne(t *testing.T) {
+
+	file, err := os.Open("C:\\Users\\wjw\\Desktop\\875905363735605284.png")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	io.Copy(part, file)
+	writer.Close()
+	request, err := http.NewRequest("POST", "http://localhost:8443/courseTrain/imgUpload", body)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	request.Header.Add("Content-Type", writer.FormDataContentType())
+	client := &http.Client{}
+
+	response, err := client.Do(request)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	content, err := ioutil.ReadAll(response.Body)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println(string(content))
 }

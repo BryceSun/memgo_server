@@ -11,12 +11,16 @@ import (
 
 func init() {
 	router := HttpRouter()
-	router.PUT("/user/account", register)
+	router.PUT("/user/account", register.withFilter())
 	router.PUT("/user/token", login)
-	router.DELETE("/user/token", logout)
+	router.DELETE(getHandleAndUrl())
 }
 
-func register(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func getHandleAndUrl() (string, httprouter.Handle) {
+	return "/user/token", logout
+}
+
+var register HH = func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	email := r.FormValue("email")
@@ -48,7 +52,7 @@ func login(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Header()["authentication"] = []string{"Bearer" + token}
 }
 
-func logout(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func logout(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	id := r.FormValue("id")
 	if len(id) != 0 {
 		uid, e := strconv.ParseInt(id, 10, 64)
