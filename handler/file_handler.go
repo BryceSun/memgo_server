@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"github.com/360EntSecGroup-Skylar/excelize/v2"
+	"github.com/memgo_server/database"
 	"io"
 	"io/ioutil"
 	"log"
@@ -14,17 +15,21 @@ import (
 )
 
 type course struct {
-	name      string
-	desc      string
-	class     string
-	img       string
-	lecturer  string
-	rawpPrice string
-	salePrice string
-	period    string
-	audience  string
-	target    string
-	parts     Parts
+	name         string
+	desc         string
+	class        string
+	img          string
+	lecturer     int
+	rawpPrice    float64
+	salePrice    float64
+	videoCnt     int
+	period       string
+	audience     string
+	target       string
+	recommend    int
+	parts        Parts
+	discountType int
+	duration     int
 }
 
 type Courses struct {
@@ -46,7 +51,7 @@ type Parts struct {
 type video struct {
 	name     string
 	url      string
-	duration string
+	duration int
 }
 
 type Videos struct {
@@ -239,42 +244,121 @@ func SaveCourseFromExcel(r io.Reader) {
 			c.current().desc = row[1]
 		}
 		if len(row[2]) != 0 {
-			c.current().class = row[2]
+			db := database.Db
+			err := db.QueryRow("select id from class where name = ? and type = 0", row[2]).Scan(&c.current().class)
+			if err != nil {
+				log.Panic(err)
+			}
+			//c.current().class = row[2]
 		}
 		file, raw, err := f.GetPicture("Sheet1", "D"+strconv.Itoa(i+1))
 		if err != nil {
 			log.Panicln(err)
 		}
-		p := SendPostRequest2(`http://localhost:8443/courseTrain/imgUpload`, file, bytes.NewReader(raw))
-		//ioutil.WriteFile(filepath.Join("D:/tmp", file), raw, 0644)
-		if len(row[3]) != 0 {
+		if len(raw) != 0 && len(file) != 0 {
+			p := SendPostRequest2(`http://localhost:8443/courseTrain/imgUpload`, file, bytes.NewReader(raw))
+			//ioutil.WriteFile(filepath.Join("D:/tmp", file), raw, 0644)
 			c.current().img = string(p)
 		}
 		if len(row[4]) != 0 {
-			c.current().lecturer = row[4]
+			db := database.Db
+			err := db.QueryRow("select user_id from user where real_name = ? limit 1;", row[4]).Scan(&c.current().lecturer)
+			if err != nil {
+				log.Panic(err)
+			}
+			//c.current().lecturer = row[4]
 		}
 		if len(row[5]) != 0 {
-			c.current().rawpPrice = row[5]
+			c.current().rawpPrice, err = strconv.ParseFloat(row[5], 32)
+			if err != nil {
+				log.Panic(err)
+			}
 		}
 		if len(row[6]) != 0 {
-			c.current().salePrice = row[6]
+			c.current().salePrice, err = strconv.ParseFloat(row[6], 32)
+			if err != nil {
+				log.Panic(err)
+			}
 		}
 		if len(row[7]) != 0 {
-			c.current().period = row[7]
+			c.current().recommend, err = strconv.Atoi(row[7])
+			if err != nil {
+				log.Panic(err)
+			}
 		}
-		c.current().parts.addName(row[8])
+		if len(row[8]) != 0 {
+			c.current().discountType, err = strconv.Atoi(row[8])
+			if err != nil {
+				log.Panic(err)
+			}
+		}
 		if len(row[9]) != 0 {
-			c.currentPart().desc = row[9]
+			c.current().audience = row[9]
 		}
-		c.currentPart().videos.addName(row[10])
-		//if len(row[11]) != 0 {
-		//c.currentVideo().url=row[11]
-
-		//}
+		if len(row[10]) != 0 {
+			c.current().target = row[10]
+		}
+		c.current().parts.addName(row[11])
 		if len(row[12]) != 0 {
-			c.currentVideo().duration = row[12]
+			c.currentPart().desc = row[12]
+		}
+		c.currentPart().videos.addName(row[13])
+		if len(row[14]) != 0 {
+			c.currentVideo().duration, err = strconv.Atoi(row[14])
+			if err != nil {
+				log.Panic(err)
+			}
+		}
+		if len(row[15]) != 0 {
+			c.currentVideo().url = row[15]
 		}
 	}
+	SaveCourse(c)
+}
+
+func SaveCourse(c *Courses) {
+	db := database.Db
+	tx, err := db.Begin()
+	if err != nil {
+		log.Panic(err)
+	}
+	for _, a := range c.courses {
+		r, err := tx.Exec(`insert into course(name, description, class_id,image_path, coin_cnt, lecturer, is_on_line,
+                   raw_price, sale_price, creator, video_cnt, recommend, discount_type,
+                   audience, target, duration)
+				values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.name, a.desc, a.class, a.img, 0, a.lecturer, 1, a.rawpPrice, a.salePrice, 1, a.videoCnt, a.recommend, a.discountType, a.audience, a.target, a.duration)
+		if err != nil {
+			log.Panic(err)
+		}
+		cid, err := r.LastInsertId()
+		if err != nil {
+			log.Panic(err)
+		}
+		for _, p := range a.parts.parts {
+			r, err := tx.Exec("insert into part(name, description, course_id) values (?,?,?) ", p.name, p.desc, cid)
+			if err != nil {
+				log.Panic(err)
+			}
+			pid, err := r.LastInsertId()
+			if err != nil {
+				log.Panic(err)
+			}
+			for _, v := range p.videos.videos {
+				_, err := tx.Exec("insert into video(pid, name, type, link, description, duration) values (?,?,?,?,?,?)", pid, v.name, 2, v.url, "", v.duration)
+				if err != nil {
+					log.Panic(err)
+				}
+				a.duration += v.duration
+			}
+			//a.videoCnt += len(p.videos.videos)
+		}
+		// todo 更新总时长和课时
+		_, err = tx.Exec("update course set video_cnt = ?, duration = ? where id = ?", a.videoCnt, a.duration, cid)
+		if err != nil {
+			log.Panic(err)
+		}
+	}
+	tx.Commit()
 }
 
 func SavePictureFromExcel() {
