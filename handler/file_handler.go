@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/360EntSecGroup-Skylar/excelize/v2"
 	"github.com/memgo_server/database"
+	"github.com/shopspring/decimal"
 	"io"
 	"io/ioutil"
 	"log"
@@ -11,25 +12,61 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 )
 
+func init() {
+
+}
+
 type course struct {
-	name         string
-	desc         string
-	class        string
-	img          string
-	lecturer     int
-	rawpPrice    float64
-	salePrice    float64
+	name         string `cellNum:"0"`
+	desc         string `cellNum:"1"`
+	class        string `cellNum:"2"`
+	img          string `cellNum:"3"`
+	lecturer     int    `cellNum:"4"`
+	rawpPrice    int    `cellNum:"5"`
+	salePrice    int    `cellNum:"6"`
 	videoCnt     int
 	period       string
-	audience     string
-	target       string
-	recommend    int
+	recommend    int    `cellNum:"7"`
+	discountType int    `cellNum:"8"`
+	audience     string `cellNum:"9"`
+	target       string `cellNum:"10"`
 	parts        Parts
-	discountType int
 	duration     int
+}
+
+type receiveField func(course)
+
+var fieldFuncs map[string]receiveField
+
+func genSetFieldFuncs() {
+	c := course{}
+	v := reflect.ValueOf(c).Elem() // the struct variable
+	for i := 0; i < v.NumField(); i++ {
+		fieldInfo := v.Type().Field(i) // a reflect.StructField
+		tag := fieldInfo.Tag           // a reflect.StructTag
+		cellNum := tag.Get("cellNum")
+		fieldFuncs[cellNum] = genSetFieldFunc(fieldInfo)
+	}
+}
+
+func genSetFieldFunc(field reflect.StructField) receiveField {
+	if field.Type.Kind() == reflect.Int {
+		return func(c course) {
+
+		}
+
+	}
+	if field.Type.Kind() == reflect.String {
+		return func(c course) {
+
+		}
+	}
+	return nil
+
 }
 
 type Courses struct {
@@ -38,8 +75,8 @@ type Courses struct {
 }
 
 type part struct {
-	name   string
-	desc   string
+	name   string `cellNum:"11"`
+	desc   string `cellNum:"12"`
 	videos Videos
 }
 
@@ -49,9 +86,9 @@ type Parts struct {
 }
 
 type video struct {
-	name     string
-	url      string
-	duration int
+	name     string `cellNum:"13"`
+	duration int    `cellNum:"14"`
+	url      string `cellNum:"15"`
 }
 
 type Videos struct {
@@ -128,8 +165,8 @@ func (p *Parts) addName(name string) {
 	}
 	pp := part{
 		videos: *NewVideos(),
+		name:   name,
 	}
-	pp.name = name
 	p.parts = append(p.parts, pp)
 	p.index++
 }
@@ -236,7 +273,7 @@ func SaveCourseFromExcel(r io.Reader) {
 	c := NewCourses()
 	rows, err := f.GetRows("Sheet1")
 	for i, row := range rows {
-		if len(row) < 13 || i == 0 {
+		if len(row) < 16 || i == 0 {
 			continue
 		}
 		c.addName(row[0])
@@ -249,15 +286,13 @@ func SaveCourseFromExcel(r io.Reader) {
 			if err != nil {
 				log.Panic(err)
 			}
-			//c.current().class = row[2]
 		}
 		file, raw, err := f.GetPicture("Sheet1", "D"+strconv.Itoa(i+1))
 		if err != nil {
 			log.Panicln(err)
 		}
 		if len(raw) != 0 && len(file) != 0 {
-			p := SendPostRequest2(`http://localhost:8443/courseTrain/imgUpload`, file, bytes.NewReader(raw))
-			//ioutil.WriteFile(filepath.Join("D:/tmp", file), raw, 0644)
+			p := SendPostRequest2(`http://139.199.3.134:8443/courseTrain/imgUpload`, file, bytes.NewReader(raw))
 			c.current().img = string(p)
 		}
 		if len(row[4]) != 0 {
@@ -269,16 +304,21 @@ func SaveCourseFromExcel(r io.Reader) {
 			//c.current().lecturer = row[4]
 		}
 		if len(row[5]) != 0 {
-			c.current().rawpPrice, err = strconv.ParseFloat(row[5], 32)
+			d, err := decimal.NewFromString(row[5])
 			if err != nil {
 				log.Panic(err)
 			}
+			rp, _ := d.Float64()
+			c.current().rawpPrice = int(rp * 100)
 		}
 		if len(row[6]) != 0 {
-			c.current().salePrice, err = strconv.ParseFloat(row[6], 32)
+			//sp, err := strconv.ParseFloat(row[6], 32)
+			d, err := decimal.NewFromString(row[6])
 			if err != nil {
 				log.Panic(err)
 			}
+			sp, _ := d.Float64()
+			c.current().salePrice = int(sp * 100)
 		}
 		if len(row[7]) != 0 {
 			c.current().recommend, err = strconv.Atoi(row[7])
@@ -287,10 +327,18 @@ func SaveCourseFromExcel(r io.Reader) {
 			}
 		}
 		if len(row[8]) != 0 {
-			c.current().discountType, err = strconv.Atoi(row[8])
-			if err != nil {
-				log.Panic(err)
+			switch row[8] {
+			case "免费":
+				c.current().discountType = 0
+			case "会员免费":
+				c.current().discountType = 1
+			case "折扣":
+				c.current().discountType = 2
 			}
+			//c.current().discountType, err = strconv.Atoi(row[8])
+			//if err != nil {
+			//	log.Panic(err)
+			//}
 		}
 		if len(row[9]) != 0 {
 			c.current().audience = row[9]
@@ -350,9 +398,8 @@ func SaveCourse(c *Courses) {
 				}
 				a.duration += v.duration
 			}
-			//a.videoCnt += len(p.videos.videos)
+			a.videoCnt += len(p.videos.videos)
 		}
-		// todo 更新总时长和课时
 		_, err = tx.Exec("update course set video_cnt = ?, duration = ? where id = ?", a.videoCnt, a.duration, cid)
 		if err != nil {
 			log.Panic(err)
