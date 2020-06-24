@@ -19,6 +19,8 @@ func init() {
 	router.POST("/file/upload", fileupload)
 	router.POST("/excel/save", saveCourseFromExcel)
 	router.POST("/excel/course", saveCourseFromExcel2)
+	router.POST("/excel/course/plus", saveCourseFromExcelPlus)
+	router.POST("/excel/courseTrain", saveCourTrainFromExcel2)
 }
 
 func fileupload(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -71,6 +73,20 @@ func saveCourseFromExcel(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 
 func saveCourseFromExcel2(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	handler.SaveCourseFromExcel(r.Body)
+	//handler.SavePictureFromExcel()
+	r.Body.Close()
+	io.WriteString(w, "Upload success")
+}
+
+func saveCourseFromExcelPlus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	handler.SaveCourseFromExcelPlus(r.Body)
+	//handler.SavePictureFromExcel()
+	r.Body.Close()
+	io.WriteString(w, "Upload success")
+}
+
+func saveCourTrainFromExcel2(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	handler.SaveCourTrainFromExcel(r.Body)
 	//handler.SavePictureFromExcel()
 	r.Body.Close()
 	io.WriteString(w, "Upload success")

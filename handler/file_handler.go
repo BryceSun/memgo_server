@@ -14,9 +14,14 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
+	"unsafe"
 )
 
 func init() {
+	genSetFieldFuncs(&course{})
+	genSetFieldFuncs(&part{})
+	genSetFieldFuncs(&video{})
 
 }
 
@@ -38,12 +43,11 @@ type course struct {
 	duration     int
 }
 
-type receiveField func(course)
+type receiveField func(interface{}, string)
 
-var fieldFuncs map[string]receiveField
+var fieldFuncs = make(map[string]receiveField)
 
-func genSetFieldFuncs() {
-	c := course{}
+func genSetFieldFuncs(c interface{}) {
 	v := reflect.ValueOf(c).Elem() // the struct variable
 	for i := 0; i < v.NumField(); i++ {
 		fieldInfo := v.Type().Field(i) // a reflect.StructField
@@ -55,14 +59,30 @@ func genSetFieldFuncs() {
 
 func genSetFieldFunc(field reflect.StructField) receiveField {
 	if field.Type.Kind() == reflect.Int {
-		return func(c course) {
-
+		return func(c interface{}, v string) {
+			var vv int
+			var err error
+			if strings.Contains(v, ".") {
+				d, err := decimal.NewFromString(v)
+				if err != nil {
+					log.Panic(err)
+				}
+				f, _ := d.Float64()
+				vv = int(f * 100)
+			} else {
+				vv, err = strconv.Atoi(v)
+				if err != nil {
+					log.Panicln(err)
+				}
+			}
+			rv := reflect.ValueOf(c).Elem()
+			rv.FieldByName(field.Name).Set(reflect.ValueOf(vv))
 		}
-
 	}
 	if field.Type.Kind() == reflect.String {
-		return func(c course) {
-
+		return func(c interface{}, v string) {
+			rv := reflect.ValueOf(c).Elem()
+			rv.FieldByName(field.Name).Set(reflect.ValueOf(v))
 		}
 	}
 	return nil
@@ -335,10 +355,6 @@ func SaveCourseFromExcel(r io.Reader) {
 			case "折扣":
 				c.current().discountType = 2
 			}
-			//c.current().discountType, err = strconv.Atoi(row[8])
-			//if err != nil {
-			//	log.Panic(err)
-			//}
 		}
 		if len(row[9]) != 0 {
 			c.current().audience = row[9]
@@ -364,6 +380,56 @@ func SaveCourseFromExcel(r io.Reader) {
 	SaveCourse(c)
 }
 
+func SaveCourseFromExcelPlus(r io.Reader) {
+	f, err := excelize.OpenReader(r)
+	if err != nil {
+		log.Panicln(err)
+	}
+	c := NewCourses()
+	rows, err := f.GetRows("Sheet1")
+	for i, row := range rows {
+		if len(row) < 16 || i == 0 {
+			continue
+		}
+		for ci, cell := range row {
+			if len(cell) == 0 {
+				if ci != 3 {
+					continue
+				}
+				file, raw, err := f.GetPicture("Sheet1", "D"+strconv.Itoa(i+1))
+				if err != nil {
+					log.Panicln(err)
+				}
+				if len(raw) != 0 && len(file) != 0 {
+					p := SendPostRequest2(`http://139.199.3.134:8443/courseTrain/imgUpload`, file, bytes.NewReader(raw))
+					cell = string(p)
+				}
+
+			}
+			if ci == 0 {
+				c.addName(cell)
+				continue
+			}
+			if ci == 11 {
+				c.current().parts.addName(cell)
+				continue
+			}
+			if ci == 13 {
+				c.currentPart().videos.addName(cell)
+				continue
+			}
+			if ci > 13 {
+				fieldFuncs[strconv.Itoa(ci)](*c.currentVideo(), cell)
+				continue
+			}
+			if ci > 11 {
+				fieldFuncs[strconv.Itoa(ci)](*c.currentPart(), cell)
+				continue
+			}
+			fieldFuncs[strconv.Itoa(ci)](*c.currentPart(), cell)
+		}
+	}
+}
 func SaveCourse(c *Courses) {
 	db := database.Db
 	tx, err := db.Begin()
@@ -420,4 +486,86 @@ func SavePictureFromExcel() {
 		log.Panicln(err)
 	}
 	ioutil.WriteFile(filepath.Join("D:/tmp", file), raw, 0644)
+}
+
+type courseTrain struct {
+	name      string `cellNum:"0"`
+	class     string `cellNum:"1"`
+	img       string `cellNum:"2"`
+	lecturer  int    `cellNum:"3"`
+	desc      string `cellNum:"4"`
+	length    int    `cellNum:"5"`
+	audience  string `cellNum:"6"`
+	target    string `cellNum:"7"`
+	directory string `cellNum:"8"`
+}
+
+func SaveCourTrainFromExcel(r io.Reader) {
+	f, err := excelize.OpenReader(r)
+	if err != nil {
+		log.Panicln(err)
+	}
+	rows, err := f.GetRows("Sheet1")
+	cs := make([]*courseTrain, 0)
+	var c *courseTrain
+	for ri, row := range rows {
+		if len(row) < 9 || ri == 0 {
+			continue
+		}
+		c = &courseTrain{}
+		for ci, cell := range row {
+			if len(cell) == 0 && ci != 2 {
+				continue
+			}
+			switch ci {
+			case 0:
+				c.name = cell
+			case 1:
+				db := database.Db
+				err := db.QueryRow("select id from class where name = ? and type = 1", cell).Scan(&c.class)
+				if err != nil {
+					log.Panic(err)
+				}
+			case 2:
+				file, raw, err := f.GetPicture("Sheet1", "C"+strconv.Itoa(ri+1))
+				if err != nil {
+					log.Panicln(err)
+				}
+				if len(raw) != 0 && len(file) != 0 {
+					p := SendPostRequest2(`http://139.199.3.134:8443/courseTrain/imgUpload`, file, bytes.NewReader(raw))
+					c.img = string(p)
+				}
+			case 3:
+				db := database.Db
+				err := db.QueryRow("select user_id from user where real_name = ? limit 1;", cell).Scan(&c.lecturer)
+				if err != nil {
+					log.Panic(err)
+				}
+			case 4:
+				c.desc = cell
+			case 5:
+				c.length, err = strconv.Atoi(cell)
+				if err != nil {
+					log.Panicln(err)
+				}
+			case 6:
+				c.audience = cell
+			case 7:
+				c.target = cell
+			case 8:
+				c.directory = cell
+			}
+		}
+		if unsafe.Sizeof(*c) != 0 {
+			cs = append(cs, c)
+		}
+	}
+	db := database.Db
+	for _, a := range cs {
+		_, err := db.Exec(`INSERT INTO fdl.course_train(name,description,class_id,image_path,lecturer,length,creator,audience,target,directory)
+                                  VALUES(?,?,?,?,?,?,?,?,?,?);`, a.name, a.desc, a.class, a.img, a.lecturer, a.length, 1, a.audience, a.target, a.directory)
+		if err != nil {
+			log.Panic(err)
+		}
+	}
 }
